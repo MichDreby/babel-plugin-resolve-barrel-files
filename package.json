@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@babel/types": "^7.16.0",
-    "typescript": "^4.5.2"
+    "typescript": "^4.5.2",
+    "simple-singletone-storage": "https://github.com/MichDreby/simple-singletone-storage.git"
   },
   "devDependencies": {
     "@babel/core": "^7.16.0",

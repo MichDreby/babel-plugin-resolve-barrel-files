@@ -1,70 +1,54 @@
-const pathLib = require("path");
-const types = require("@babel/types");
+const pathLib = require('path');
 
-const { err, partition } = require("./src/misc");
-const { collectEsmExports } = require("./src/collect-esm-exports");
-const { collectCjsExports } = require("./src/collect-cjs-exports");
-const { resolveLogLevel, DEBUG, INFO } = require("./src/log");
+const types = require('@babel/types');
+
+const {
+  collectEsmExports,
+  getIndexFileFromDirectory,
+} = require('./src/collect-esm-exports');
+const { err, partition } = require('./src/misc');
 
 const cachedResolvers = {};
 
-function getCachedExports({
-  logLevel,
-  moduleName,
-  barrelFilePath,
-  moduleType,
-}) {
-  if (cachedResolvers[moduleName]) {
-    return cachedResolvers[moduleName];
+function getCachedExports({ barrelDirPath }) {
+
+  if (cachedResolvers[barrelDirPath]) {
+    return cachedResolvers[barrelDirPath];
+  } else {
+    cachedResolvers[barrelDirPath] = collectEsmExports(barrelDirPath);
   }
 
-  if (moduleType === "esm") {
-    cachedResolvers[moduleName] = collectEsmExports(barrelFilePath);
-  }
-
-  if (moduleType === "commonjs") {
-    cachedResolvers[moduleName] = collectCjsExports(barrelFilePath);
-  }
-
-  logLevel >= INFO && console.log(`[resolve-barrel-files] '${moduleName}' exports:`, cachedResolvers[moduleName]);
-
-  return cachedResolvers[moduleName];
+  return cachedResolvers[barrelDirPath];
 }
 
-module.exports = function() {
+module.exports = function () {
   return {
     visitor: {
-      ImportDeclaration: function(path, state) {
+      ImportDeclaration(path, state) {
         const moduleName = path.node.source.value;
-        const sourceConfig = state.opts?.[moduleName];
+        const targetDir = pathLib.join(state.filename, '..', moduleName); // User/kv/h3-fe-consumer/src/barrelFolder
 
-        if (!sourceConfig) {
+        const isTargetDirHasBarrelFolder = state.opts.barrelFiles.some(
+          barrelPath => pathLib.join(state.cwd, barrelPath) === targetDir, // barrelPath === 'src/barrelFolder'
+        );
+
+        if (!isTargetDirHasBarrelFolder) {
           return;
         }
 
         const transforms = [];
-        const mainBarrelPath = sourceConfig.mainBarrelPath;
-        const mainBarrelFolder = pathLib.join(mainBarrelPath, "..");
-        const moduleType = sourceConfig.moduleType || "commonjs";
-        const logLevel = resolveLogLevel(sourceConfig.logLevel);
-
-        logLevel >= DEBUG
-          && console.log(`[resolve-barrel-files] Resolving ${moduleType} imports from ${mainBarrelPath}`);
 
         const exports = getCachedExports({
-          logLevel,
-          moduleName,
-          barrelFilePath: mainBarrelPath,
-          moduleType,
+          barrelDirPath: targetDir
         });
 
         const [fullImports, memberImports] = partition(
-          specifier => specifier.type !== "ImportSpecifier",
+          specifier => specifier.type !== 'ImportSpecifier',
           path.node.specifiers,
         );
 
         if (fullImports.length) {
-          err("Full imports are not supported");
+          err('Full imports are not supported');
         }
 
         for (const memberImport of memberImports) {
@@ -73,16 +57,17 @@ module.exports = function() {
           const exportInfo = exports[importName];
 
           if (!exports[importName]) {
-            logLevel >= DEBUG
-              && console.log(
-                `[${moduleName}] No export info found for ${importName}, are you sure this is a ${moduleType} module?`,
-              );
+            // console.log(
+            //   `[${moduleName}] No export info found for ${importName}`,
+            // );
             continue;
           }
 
-          const importFrom = pathLib.join(mainBarrelFolder, exportInfo.importPath);
+          const importFrom = pathLib.join(targetDir, exportInfo.importPath);
 
-          logLevel >= DEBUG && console.log(`[${moduleName}] Resolving '${importName}' to ${importFrom}`);
+          // console.log(
+          //   `[${moduleName}] Resolving '${importName}' to ${importFrom}`,
+          // );
 
           let newImportSpecifier = memberImport;
 
@@ -93,10 +78,12 @@ module.exports = function() {
             );
           }
 
-          transforms.push(types.importDeclaration(
-            [newImportSpecifier],
-            types.stringLiteral(importFrom),
-          ));
+          transforms.push(
+            types.importDeclaration(
+              [newImportSpecifier],
+              types.stringLiteral(importFrom),
+            ),
+          );
         }
 
         if (transforms.length > 0) {

@@ -1783,6 +1783,10 @@ shallow-clone@^3.0.0:
   dependencies:
     kind-of "^6.0.2"
 
+"simple-singletone-storage@https://github.com/MichDreby/simple-singletone-storage.git":
+  version "1.0.0"
+  resolved "https://github.com/MichDreby/simple-singletone-storage.git#039f011589d838588e2504f586508d215b8a11f2"
+
 source-map-support@^0.5.16:
   version "0.5.21"
   resolved "https://registry.yarnpkg.com/source-map-support/-/source-map-support-0.5.21.tgz#04fe7c7f9e1ed2d662233c28cb2b35b9f63f6e4f"
